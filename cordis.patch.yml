@@ -1,0 +1,5 @@
+# dsh-safety-net bundle patch: mount the safety-net plugin row so the
+# profile's scope chain loads the guardrail plugin.
+- insert:
+    - id: safety-net
+      name: 'dsh-safety-net'
