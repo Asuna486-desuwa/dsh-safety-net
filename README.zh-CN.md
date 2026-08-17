@@ -45,9 +45,11 @@ strict 模式**默认开启**：safety-net *声明*一个只读的默认沙箱�
 
 ## 安装
 
-要求 Node.js ≥ 20。
+要求 Node.js ≥ 20 和正在运行的 DeepSeek Harness（DSH）宿主。
 
-**通过 npm 安装**（发布后）：
+> **依赖说明**：`@deepseek-ai/cordis` 与 `@deepseek-ai/dsh-fs` 声明为 **peer 依赖**——它们由 DSH 宿主运行时自带，不会从公开 npm 拉取（DSH 携带的 `dsh-fs` 版本在公开 npm 上可能不存在）。请在本插件的 DSH profile 内安装，**不要**单独 `npm install`。
+
+**通过 npm 安装**：
 
 ```bash
 dsh plugin add dsh-safety-net

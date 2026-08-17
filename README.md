@@ -67,9 +67,15 @@ cannot force. Turn strict off only if you understand the trade-off
 
 ## Installation
 
-Requires Node.js ≥ 20.
+Requires Node.js ≥ 20 and a running DeepSeek Harness (DSH) host.
 
-**From npm** (once published):
+> **Dependencies**: `@deepseek-ai/cordis` and `@deepseek-ai/dsh-fs` are declared
+> as **peer dependencies** — they are provided by the DSH host runtime itself
+> and are not fetched from the public npm registry (the `dsh-fs` version DSH
+> ships may not exist on public npm). Install this plugin *inside* a DSH
+> profile; do not `npm install` it standalone.
+
+**From npm**:
 
 ```bash
 dsh plugin add dsh-safety-net
