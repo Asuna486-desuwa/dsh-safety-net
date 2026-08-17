@@ -44,6 +44,9 @@
     "@deepseek-ai/dsh-fs": ">=0.0.1-rc.1",
     "@deepseek-ai/cordis": ">=4.0.1"
   },
+  "devDependencies": {
+    "@deepseek-ai/dsh-fs": "^0.1.0-rc.6"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
