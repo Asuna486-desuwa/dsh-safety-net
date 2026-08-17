@@ -35,3 +35,62 @@ test('safety-net-status handler returns success with text', async () => {
   assert.equal(result.kind, 'success')
   assert.match(result.text, /safety-net/i)
 })
+
+// Carry-over (Task 5 review): backup/restore must degrade to an error result
+// when the backup store is not wired (backups === null), never throw.
+test('backup/restore degrade to error when backups is null', async () => {
+  const ctx = makeCtx()
+  registerAll(ctx)
+  const backupCmd = ctx.commands.find((c) => c.name === 'safety-net-backup')
+  const restoreCmd = ctx.commands.find((c) => c.name === 'safety-net-restore')
+  const b = await backupCmd.handler('')
+  const r = await restoreCmd.handler('')
+  assert.equal(b.kind, 'error')
+  assert.match(b.text, /backup store not available/i)
+  assert.equal(r.kind, 'error')
+  assert.match(r.text, /backup store not available/i)
+})
+
+// Carry-over (Task 5 review): the restore handler must support the id branch —
+// calling backups.restore(id) and reporting success.
+test('restore with an id restores that backup', async () => {
+  const ctx = makeCtx()
+  let restoredId = null
+  ctx.safetyNet = {
+    guard: { rules: [] },
+    backups: {
+      list: async () => [{ id: 'bk-1' }],
+      restore: async (id) => { restoredId = id },
+    },
+    dshHome: 'C:/Users/test/.dsh',
+    strict: true,
+    protectedSources: [],
+    readSource: async () => 'x',
+  }
+  registerAll(ctx)
+  const cmd = ctx.commands.find((c) => c.name === 'safety-net-restore')
+  const result = await cmd.handler('bk-1')
+  assert.equal(result.kind, 'success')
+  assert.equal(restoredId, 'bk-1')
+  assert.match(result.text, /bk-1/)
+})
+
+// Carry-over (Task 5 review): a broken backup listing must not crash the
+// status command — it returns an error result instead.
+test('status handler degrades to error when backup listing fails', async () => {
+  const ctx = makeCtx()
+  ctx.safetyNet = {
+    guard: { rules: [] },
+    backups: { list: async () => { throw new Error('disk on fire') } },
+    dshHome: 'C:/Users/test/.dsh',
+    strict: true,
+    protectedSources: [],
+    readSource: async () => 'x',
+  }
+  registerAll(ctx)
+  const cmd = ctx.commands.find((c) => c.name === 'safety-net-status')
+  const result = await cmd.handler('')
+  assert.equal(result.kind, 'error')
+  assert.match(result.text, /safety-net/i)
+  assert.match(result.text, /disk on fire/)
+})
