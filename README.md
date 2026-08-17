@@ -40,8 +40,8 @@ silently retry its way past it. Extra paths can be added via
 
 Before a protected path is refused, the original file is snapshotted into the
 backup store. Nothing is ever destroyed: every blocked write/edit leaves a
-restorable copy behind, so the worst case is one command away from being
-undone.
+restorable copy behind (unless the snapshot itself fails), so the worst case
+is one command away from being undone.
 
 ### 3. CLI self-recovery channel
 
@@ -92,7 +92,7 @@ safetyNet:
   strict: true
   # Additional paths to protect (beyond the built-in DSH critical paths)
   extraProtectedPaths: []
-  # How many snapshots to keep before pruning old backups. Default: 30
+  # Reserved — retention-based pruning wiring lands in a later release. Default: 30
   backupRetention: 30
 ```
 
@@ -100,7 +100,7 @@ safetyNet:
 | ---------------------- | -------- | --------------- | -------------------------------------------------------- |
 | `safetyNet.strict`     | boolean  | `true`          | Default sandbox mode is `read-only` when enabled.        |
 | `safetyNet.extraProtectedPaths` | string[] | `[]`   | Extra paths treated as DSH critical assets.              |
-| `safetyNet.backupRetention` | number | `30`        | Max snapshots kept in the backup store before pruning.   |
+| `safetyNet.backupRetention` | number | `30`        | Max snapshots kept in the backup store before pruning (reserved; pruning wiring lands in a later release). |
 | `safetyNet.dshHome`    | string   | env `DSH_HOME` or `~/.dsh` | Override the DSH data root (used by the guard, the backup store and the status report alike). |
 | `safetyNet.pluginDataRoot` | string | `~/.claude/plugins/data` | Override the plugin data root (mainly for tests/injection). |
 

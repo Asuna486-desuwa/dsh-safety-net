@@ -25,7 +25,7 @@ DSH 自身的运行时状态以普通文件形式存放在 `~/.dsh`（profiles�
 
 ### 2. 破坏前备份
 
-在拒绝写入受保护路径之前，会先把原文件快照进备份库。任何东西都不会被销毁：每一次被拦截的写/编辑操作都会留下可恢复的副本，最坏情况也只需一条命令就能撤销。
+在拒绝写入受保护路径之前，会先把原文件快照进备份库。任何东西都不会被销毁：每一次被拦截的写/编辑操作都会留下可恢复的副本（除非快照本身失败），最坏情况也只需一条命令就能撤销。
 
 ### 3. CLI 自救通道
 
@@ -70,7 +70,7 @@ safetyNet:
   strict: true
   # 额外需要保护的路径（在内置 DSH 关键路径之外追加）
   extraProtectedPaths: []
-  # 备份库在清理前保留的快照数量。默认值：30
+  # 预留 — 按保留份数清理的接线将在后续版本接入。默认值：30
   backupRetention: 30
 ```
 
@@ -78,7 +78,7 @@ safetyNet:
 | --- | --- | --- | --- |
 | `safetyNet.strict` | boolean | `true` | 开启后默认沙箱模式为 `read-only`。 |
 | `safetyNet.extraProtectedPaths` | string[] | `[]` | 视为 DSH 关键资产的额外路径。 |
-| `safetyNet.backupRetention` | number | `30` | 备份库在 prune 前保留的最大快照数。 |
+| `safetyNet.backupRetention` | number | `30` | 备份库在 prune 前保留的最大快照数（预留；按保留份数清理的接线将在后续版本接入）。 |
 | `safetyNet.dshHome` | string | 环境变量 `DSH_HOME` 或 `~/.dsh` | 覆盖 DSH 数据根目录（守卫、备份库与状态报告统一使用该值）。 |
 | `safetyNet.pluginDataRoot` | string | `~/.claude/plugins/data` | 覆盖插件数据根目录（主要用于测试/注入）。 |
 
