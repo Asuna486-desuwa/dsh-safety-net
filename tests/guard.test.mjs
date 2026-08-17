@@ -20,7 +20,11 @@ test('isProtected matches ~/.dsh tree', () => {
 })
 
 test('isProtected matches plugin data dir', () => {
-  const g = createGuard({ dshHome: DSH_HOME, extraProtectedPaths: [] })
+  const g = createGuard({
+    dshHome: DSH_HOME,
+    pluginDataRoot: 'C:/Users/test/.claude/plugins/data',
+    extraProtectedPaths: [],
+  })
   const pluginData = 'C:/Users/test/.claude/plugins/data/dsh-deepseek-dsh'
   assert.equal(g.isProtected(`${pluginData}/config.json`), true)
   assert.equal(g.isProtected(`${pluginData}/npm/package.json`), true)
