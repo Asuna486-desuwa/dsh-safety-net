@@ -40,7 +40,7 @@ DSH 自身的运行时状态以普通文件形式存放在 `~/.dsh`（profiles�
 
 ### 4. strict 权限分级
 
-strict 模式**默认开启**：生效的默认沙箱模式变为 `read-only`，即使某些代码路径从不查询守卫，也从非破坏性姿态起步。只有在你理解代价时才关闭（`safetyNet.strict: false`）。
+strict 模式**默认开启**：safety-net *声明*一个只读的默认沙箱模式，并在宿主沙箱默认模式更宽（`workspace-write` / `danger-full-access`）时输出警告。这只是声明——实际强制执行仍由宿主沙箱后端负责，safety-net 无法强行改变宿主。只有在你理解代价时才关闭（`safetyNet.strict: false`）。
 
 ## 安装
 
@@ -66,7 +66,7 @@ dsh plugin add git+https://github.com/Asuna486-desuwa/dsh-safety-net.git
 
 ```yaml
 safetyNet:
-  # strict 模式：默认沙箱模式为 read-only。默认值：true
+  # strict 模式：声明默认沙箱模式为只读；宿主沙箱默认更宽时输出警告。默认值：true
   strict: true
   # 额外需要保护的路径（在内置 DSH 关键路径之外追加）
   extraProtectedPaths: []
@@ -76,7 +76,7 @@ safetyNet:
 
 | 键 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `safetyNet.strict` | boolean | `true` | 开启后默认沙箱模式为 `read-only`。 |
+| `safetyNet.strict` | boolean | `true` | 声明默认沙箱模式为只读；宿主沙箱默认更宽（`workspace-write` / `danger-full-access`）时输出警告。 |
 | `safetyNet.extraProtectedPaths` | string[] | `[]` | 视为 DSH 关键资产的额外路径。 |
 | `safetyNet.backupRetention` | number | `30` | 备份库在 prune 前保留的最大快照数（预留；按保留份数清理的接线将在后续版本接入）。 |
 | `safetyNet.dshHome` | string | 环境变量 `DSH_HOME` 或 `~/.dsh` | 覆盖 DSH 数据根目录（守卫、备份库与状态报告统一使用该值）。 |
@@ -105,6 +105,15 @@ safetyNet:
 ```
 
 每个快照是一个以时间 id 命名的目录；目录下保留原文件的相对路径，因此恢复时可以把每个文件放回它原来的位置。
+
+## 解除误拦截
+
+如果一次合法的写入被拦截——比如你确实需要修改受保护路径下的文件——请注意：
+
+- 通过 `safetyNet.extraProtectedPaths` 添加的路径**运行时只能加不能减**：想解除保护，请从配置中移除该条目并重启 DSH；
+- 内置规则（`~/.dsh`、profiles、state、插件数据目录）无法通过配置移除。`strict` 只*声明*沙箱姿态，**不会**解除路径拦截。要修改内置受保护文件，请先卸载本插件（`dsh plugin remove dsh-safety-net`）完成修改后再装回。
+
+运行时的一次性放行通道（`approveOnce`，守卫上已有单元测试）计划在 v0.2 接入；在那之前，被拦截的错误消息会指向上述两条出路。
 
 ## 自救手册（GUI 挂了怎么办）
 

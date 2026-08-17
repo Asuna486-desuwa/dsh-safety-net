@@ -27,6 +27,18 @@ test('buildStatusText reports guard and backup state', () => {
   assert.match(text, /strict/i)
 })
 
+// I-2 regression: status text must describe strict honestly — it declares a
+// read-only default, it does not enforce one; host enforcement depends on the
+// sandbox backend.
+test('buildStatusText describes strict honestly', () => {
+  const on = buildStatusText({ protectedRuleCount: 1, backupCount: 0, strict: true, dshHome: '/x' })
+  const off = buildStatusText({ protectedRuleCount: 1, backupCount: 0, strict: false, dshHome: '/x' })
+  assert.match(on, /declared read-only default/i)
+  assert.match(on, /host enforcement depends on sandbox backend/i)
+  assert.match(off, /workspace-write default/i)
+  assert.doesNotMatch(on, /sandbox defaults to read-only/i)
+})
+
 test('safety-net-status handler returns success with text', async () => {
   const ctx = makeCtx()
   registerAll(ctx)

@@ -57,9 +57,11 @@ See [Commands](#commands) for details.
 
 ### 4. Strict privilege tiering
 
-Strict mode is **on by default**: the effective default sandbox mode becomes
-`read-only`, so even code paths that never consult the guard start from a
-non-destructive posture. Turn it off only if you understand the trade-off
+Strict mode is **on by default**: safety-net *declares* a read-only default
+sandbox mode and warns when the host sandbox default is wider
+(`workspace-write` / `danger-full-access`). The declaration is advisory —
+actual enforcement stays with the host sandbox backend, which safety-net
+cannot force. Turn strict off only if you understand the trade-off
 (`safetyNet.strict: false`).
 
 ## Installation
@@ -88,7 +90,8 @@ All options live under the `safetyNet` key:
 
 ```yaml
 safetyNet:
-  # Strict mode: default sandbox mode is read-only. Default: true
+  # Strict mode: declares a read-only default and warns if the host sandbox
+  # default is not tightened. Default: true
   strict: true
   # Additional paths to protect (beyond the built-in DSH critical paths)
   extraProtectedPaths: []
@@ -98,7 +101,7 @@ safetyNet:
 
 | Key                    | Type     | Default         | Description                                              |
 | ---------------------- | -------- | --------------- | -------------------------------------------------------- |
-| `safetyNet.strict`     | boolean  | `true`          | Default sandbox mode is `read-only` when enabled.        |
+| `safetyNet.strict`     | boolean  | `true`          | Declares a read-only default sandbox mode; warns when the host sandbox default is wider (`workspace-write` / `danger-full-access`). |
 | `safetyNet.extraProtectedPaths` | string[] | `[]`   | Extra paths treated as DSH critical assets.              |
 | `safetyNet.backupRetention` | number | `30`        | Max snapshots kept in the backup store before pruning (reserved; pruning wiring lands in a later release). |
 | `safetyNet.dshHome`    | string   | env `DSH_HOME` or `~/.dsh` | Override the DSH data root (used by the guard, the backup store and the status report alike). |
@@ -118,6 +121,24 @@ are shown below with a leading `/` as they appear in the DSH UI/CLI.
 | `/safety-net-restore`            | With no argument, lists all backups (newest first).                      |
 | `/safety-net-restore <id>`       | Restores the files of the given backup id to their original locations.   |
 | `/safety-net-repair`             | Detects missing critical files and prints recovery instructions (never auto-modifies anything). |
+
+## Unblocking a false positive
+
+If a legitimate write is blocked — e.g. you really need to modify a file under
+a protected path — keep this in mind:
+
+- paths you added via `safetyNet.extraProtectedPaths` are **add-only at
+  runtime**: to stop protecting one, remove the entry from the config and
+  restart DSH;
+- the built-in rules (`~/.dsh`, profiles, state, plugin data) cannot be
+  removed through configuration. `strict` only *declares* the sandbox posture
+  and does **not** lift path interception. To modify a built-in protected
+  file, unload this plugin first (`dsh plugin remove dsh-safety-net`), do the
+  edit, then re-add it.
+
+A runtime one-time approval channel (`approveOnce`, already unit-tested on the
+guard) is planned for v0.2; until then the blocked error message points at the
+two options above.
 
 ## Backup layout
 
