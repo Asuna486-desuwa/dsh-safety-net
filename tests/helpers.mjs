@@ -30,7 +30,7 @@ export function makeFakeFs() {
   }
 }
 
-export function makeCtx() {
+export function makeCtx({ config } = {}) {
   const listeners = new Map()
   const commands = []
   const killedJobs = []
@@ -41,6 +41,7 @@ export function makeCtx() {
     return () => {}
   }
   return {
+    config,
     listeners,
     commands,
     killedJobs,

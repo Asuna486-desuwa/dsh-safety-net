@@ -7,7 +7,7 @@ import { makeCtx } from './helpers.mjs'
 const DSH_HOME = 'C:/Users/test/.dsh'
 
 function setup() {
-  const ctx = makeCtx()
+  const ctx = makeCtx({ config: { safetyNet: { dshHome: DSH_HOME } } })
   plugin.apply(ctx)
   return ctx
 }
@@ -49,11 +49,14 @@ test('passes through workspace writes', async () => {
   assert.ok(results.some((r) => r === 'passed'), `expected pass-through, got ${JSON.stringify(results)}`)
 })
 
-test('approved path is allowed through', async () => {
+test('settings.json under dshHome is blocked', async () => {
   const ctx = setup()
   const path = `${DSH_HOME}/settings.json`
-  // approval happens on the guard inside the plugin; simulate via write-intent pass
-  // then verify a second identical intent still blocks (one-time bypass is per-path, exercised in guard tests)
+  // The approval (approveOnce) bypass lives on the guard and is not exposed
+  // through the plugin's fs-intent listeners, so the approval chain is out of
+  // scope here; the one-time bypass unit behavior is covered in guard.test.mjs.
+  // This test asserts settings.json under the injected dshHome is hard-blocked
+  // like any other protected path.
   const target = { targetKey: path, displayPath: path }
   const results = await runIntents(ctx, target)
   assert.ok(results.some((r) => r && r.error && r.error.code === 'FS_POLICY_DENIED'))
