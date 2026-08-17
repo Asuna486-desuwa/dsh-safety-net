@@ -1,6 +1,6 @@
 {
   "name": "dsh-safety-net",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Self-protection guardrails for the DeepSeek Harness: protected-path interception, backup-before-destroy, CLI self-recovery commands, and strict sandbox defaulting",
   "private": false,
   "type": "module",
