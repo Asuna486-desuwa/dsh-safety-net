@@ -1,6 +1,6 @@
 {
   "name": "dsh-safety-net",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Self-protection guardrails for the DeepSeek Harness: protected-path interception, backup-before-destroy, CLI self-recovery commands, and strict sandbox defaulting",
   "private": false,
   "type": "module",
@@ -17,15 +17,25 @@
     "LICENSE"
   ],
   "license": "MIT",
-  "keywords": ["dsh", "deepseek-harness", "plugin", "safety", "guardrails"],
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "safety",
+    "guardrails"
+  ],
   "author": "Asuna486-desuwa",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Asuna486-desuwa/dsh-safety-net.git"
   },
   "homepage": "https://github.com/Asuna486-desuwa/dsh-safety-net#readme",
-  "bugs": { "url": "https://github.com/Asuna486-desuwa/dsh-safety-net/issues" },
-  "engines": { "node": ">=20" },
+  "bugs": {
+    "url": "https://github.com/Asuna486-desuwa/dsh-safety-net/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "test": "node --test tests/*.test.mjs"
   },
