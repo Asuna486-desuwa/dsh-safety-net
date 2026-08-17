@@ -14,7 +14,17 @@ function fakeDir() {
   const store = new Map()
   return {
     store,
-    async mkdir(p) { store.set(p, { kind: 'dir' }) },
+    async mkdir(p, opts) {
+      // mimic fs.promises.mkdir(..., { recursive: true }): create every missing
+      // parent so stat() of intermediate dirs reports isDirectory() (the real
+      // store relies on this when snapshotting multi-level source paths)
+      const parts = String(p).replace(/^[/\\]+/, '').split('/')
+      let cur = ''
+      for (const part of parts) {
+        cur += '/' + part
+        if (!store.has(cur)) store.set(cur, { kind: 'dir' })
+      }
+    },
     async readFile(p) {
       const v = store.get(p)
       if (!v) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
@@ -85,4 +95,25 @@ test('prune keeps the newest retention snapshots', async () => {
   await store.prune(2)
   const list = await store.list()
   assert.equal(list.length, 2)
+})
+
+// Carry-over (Task 4 review): Windows drive paths must be normalized into the
+// snapshot tree — drive letter + leading separators stripped, backslashes
+// unified to '/'. Otherwise posix.relative() mangles drive paths into a
+// CWD-relative garbage path containing ':' (an illegal filename segment).
+test('snapshot normalizes Windows drive paths', async () => {
+  const dir = fakeDir()
+  const store = createBackupStore({ root: '/bk', dir })
+  const id = await store.snapshot('C:/Users/test/.dsh/settings.json', '{"token":"x"}')
+  const rel = 'Users/test/.dsh/settings.json'
+  const list = await store.list()
+  assert.equal(list.length, 1)
+  assert.equal(list[0].id, id)
+  // snapshot stored under root/<id>/Users/test/.dsh/settings.json (drive stripped)
+  assert.equal(await dir.readFile(`/bk/${id}/${rel}`), '{"token":"x"}')
+  // restore rebuilds the normalized root-relative path and writes the content
+  // back to it (the drive letter is not recoverable once stripped)
+  await dir.writeFile(`/${rel}`, 'corrupted')
+  await store.restore(id)
+  assert.equal(await dir.readFile(`/${rel}`), '{"token":"x"}')
 })
