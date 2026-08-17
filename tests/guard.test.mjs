@@ -49,3 +49,24 @@ test('approveOnce grants one-time bypass', () => {
   assert.equal(g.isProtected(path), false)
   assert.equal(g.isProtected(path), true) // one-time only
 })
+
+// Review round 2, bug 1: isRuleProtected is a PURE rule check — it must NOT
+// consume a pending approval (isProtected() does, and returns false, which
+// made /safety-net-approve eat the approval and misreport "not protected").
+test('isRuleProtected does not consume a pending approval', () => {
+  const g = createGuard({ dshHome: DSH_HOME, extraProtectedPaths: [] })
+  const path = `${DSH_HOME}/settings.json`
+  assert.equal(g.isRuleProtected(path), true)   // rule says protected
+  g.approveOnce(path)                            // grant one-time approval
+  // calling isRuleProtected must leave the approval intact
+  assert.equal(g.isRuleProtected(path), true)
+  // and the approval is still usable exactly once via isProtected()
+  assert.equal(g.isProtected(path), false)       // consumed now
+  assert.equal(g.isProtected(path), true)        // re-armed
+})
+
+test('isRuleProtected ignores extra protected paths matching pure rules', () => {
+  const g = createGuard({ dshHome: DSH_HOME, extraProtectedPaths: ['C:/secret'] })
+  assert.equal(g.isRuleProtected('C:/secret/notes.txt'), true)
+  assert.equal(g.isRuleProtected('C:/Users/test/Desktop/project/src/main.js'), false)
+})

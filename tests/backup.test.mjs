@@ -149,3 +149,21 @@ test('restore falls back to normalized path when no meta sidecar exists', async 
   await store.restore(id)
   assert.equal(await dir.readFile('/Users/test/.dsh/settings.json'), '{"a":1}')
 })
+
+// Review round 2, #3: _meta.json may record a NATIVE Windows path with
+// backslashes (C:\Users\x\.dsh\settings.json, as produced by expandSources'
+// node:path.join). Restore must create the target directory correctly for
+// such paths — posix.dirname would return '.' and mkdir('.') would no-op,
+// failing when the directory does not exist (e.g. cross-machine restore).
+test('restore handles native backslash windows paths with missing target dirs', async () => {
+  const dir = fakeDir()
+  const store = createBackupStore({ root: '/bk', dir })
+  const id = await store.snapshot('C:/Users/test/.dsh/settings.json', '{"x":1}')
+  const rel = 'Users/test/.dsh/settings.json'
+  // rewrite the sidecar with a NATIVE backslash path (like expandSources gives)
+  const native = 'C:\\Users\\test\\.dsh\\settings.json'
+  dir.store.set(`bk/${id}/_meta.json`, { kind: 'file', text: JSON.stringify({ sources: { [rel]: native } }) })
+  // target directory does NOT exist yet — restore must create it
+  await store.restore(id)
+  assert.equal(await dir.readFile('C:/Users/test/.dsh/settings.json'), '{"x":1}')
+})
