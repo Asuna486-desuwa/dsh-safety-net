@@ -15,5 +15,10 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: https://registry.npmjs.org
-      - run: npm ci
+      # --legacy-peer-deps: the peer chain of @deepseek-ai/dsh-fs pulls in
+      # private packages (dsh-type-meta, ...) that exist only inside the DSH
+      # host install, not on public npm. CI runs the unit tests (fake-driven),
+      # so strict peer resolution is neither possible nor needed — the lock's
+      # npmmirror tarballs provide what the tests import.
+      - run: npm ci --legacy-peer-deps
       - run: npm test

@@ -13,7 +13,9 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-      - run: npm ci
+      # --legacy-peer-deps: see test.yml — the dsh-fs peer chain references
+      # private packages absent from public npm; CI/tests do not need them.
+      - run: npm ci --legacy-peer-deps
       - run: npm test
       - run: npm publish
         env:
