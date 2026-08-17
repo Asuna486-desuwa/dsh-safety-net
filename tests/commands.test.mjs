@@ -135,22 +135,25 @@ test('backup awaits ready before reading protectedSources', async () => {
 
 // Review fix 5: approve wires guard.approveOnce into the CLI — one-time
 // approval for a protected path, with usage/not-protected branches.
+// Review round 3, #3: approve tests must drive the REAL createGuard (whose
+// isProtected() consumes pending approvals) — a fake pure predicate cannot
+// expose the side-effect bug. DSH_HOME here is deliberately outside any real
+// user dir, and the guard is pure string matching (no fs access).
+import { createGuard } from '../lib/guard.js'
+
+const CMD_DSH_HOME = 'C:/Users/test/.dsh'
+
 test('safety-net-approve grants a one-time bypass for protected paths', async () => {
   const ctx = makeCtx()
-  const approved = []
   ctx.safetyNet = {
-    guard: {
-      rules: [],
-      isRuleProtected: (p) => p === 'C:/Users/test/.dsh/settings.json',
-      approveOnce: (p) => approved.push(p),
-    },
+    guard: createGuard({ dshHome: CMD_DSH_HOME, extraProtectedPaths: [] }),
   }
   registerAll(ctx)
   const cmd = ctx.commands.find((c) => c.name === 'safety-net-approve')
+  const target = `${CMD_DSH_HOME}/settings.json`
 
-  const ok = await cmd.handler('C:/Users/test/.dsh/settings.json')
+  const ok = await cmd.handler(target)
   assert.equal(ok.kind, 'success')
-  assert.deepEqual(approved, ['C:/Users/test/.dsh/settings.json'])
   assert.match(ok.text, /approved one-time write/i)
 
   const notProtected = await cmd.handler('C:/Users/test/Desktop/project/src/main.js')
@@ -162,29 +165,31 @@ test('safety-net-approve grants a one-time bypass for protected paths', async ()
   assert.match(usage.text, /usage/i)
 })
 
-// Review round 2, bug 1 regression: calling /safety-net-approve TWICE on the
-// same protected path must grant TWO pending approvals (each usable once) —
-// the second call must not consume the first's approval nor misreport
-// "not protected". The guard uses isRuleProtected (pure), not isProtected.
-test('approve twice grants two independent one-time approvals', async () => {
+// Review round 2, bug 1 + round 3, #3 regression: /safety-net-approve must
+// NOT consume a pending approval while checking (isProtected() would), and the
+// real createGuard is driven end to end. approveOnce is Set-backed (one
+// pending approval per path): two approves for the same path still arm one
+// one-time bypass, and the second call must never misreport "not protected".
+test('approve twice stays armed and never misreports not protected', async () => {
   const ctx = makeCtx()
-  const approved = []
   ctx.safetyNet = {
-    guard: {
-      rules: [],
-      isRuleProtected: (p) => p === 'C:/Users/test/.dsh/settings.json',
-      approveOnce: (p) => approved.push(p),
-    },
+    guard: createGuard({ dshHome: CMD_DSH_HOME, extraProtectedPaths: [] }),
   }
   registerAll(ctx)
   const cmd = ctx.commands.find((c) => c.name === 'safety-net-approve')
-  const first = await cmd.handler('C:/Users/test/.dsh/settings.json')
+  const target = `${CMD_DSH_HOME}/settings.json`
+  const first = await cmd.handler(target)
   assert.equal(first.kind, 'success')
   assert.match(first.text, /approved one-time write/i)
-  const second = await cmd.handler('C:/Users/test/.dsh/settings.json')
+  // second call must not report "not protected" (the pure check sees the rule)
+  const second = await cmd.handler(target)
   assert.equal(second.kind, 'success')
   assert.match(second.text, /approved one-time write/i)
-  assert.deepEqual(approved, ['C:/Users/test/.dsh/settings.json', 'C:/Users/test/.dsh/settings.json'])
+  assert.doesNotMatch(second.text, /not protected/i)
+  // the pending approval is still armed and consumed exactly once
+  const g = ctx.safetyNet.guard
+  assert.equal(g.isProtected(target), false) // consumed now
+  assert.equal(g.isProtected(target), true)  // re-armed
 })
 
 // Review round 2, #2: backup must surface real failures (permission, disk

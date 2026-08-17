@@ -82,3 +82,31 @@ test('every protected source is readable (repair will not misreport)', async () 
     await rm(tmp, { recursive: true, force: true })
   }
 })
+
+// Review round 3, #1: user-added extraProtectedPaths must be backed up and
+// repaired too — not just blocked by the guard. They have to appear in
+// protectedSources so /safety-net-backup snapshots them and /safety-net-repair
+// detects them missing.
+test('extraProtectedPaths are included in protectedSources (backed up + repaired)', async () => {
+  const tmp = await mkdtemp(join(tmpdir(), 'safetynet-src-'))
+  try {
+    const home = join(tmp, 'home')
+    const extra = join(tmp, 'secrets')
+    await mkdir(join(home, 'profiles'), { recursive: true })
+    await mkdir(join(extra, 'nested'), { recursive: true })
+    await writeFile(join(home, 'settings.json'), 'x', 'utf8')
+    await writeFile(join(extra, 'nested', 'key.txt'), 'secret', 'utf8')
+
+    const ctx = makeCtx({
+      config: { safetyNet: { dshHome: home, pluginDataRoot: tmp, extraProtectedPaths: [extra] } },
+    })
+    plugin.apply(ctx)
+    await waitForSources(ctx, 1)
+
+    const sources = ctx.safetyNet.protectedSources
+    assert.ok(sources.includes(join(extra, 'nested', 'key.txt')), 'extra protected deep file must be collected')
+    assert.ok(!sources.includes(extra), 'extra dir itself must not be collected')
+  } finally {
+    await rm(tmp, { recursive: true, force: true })
+  }
+})

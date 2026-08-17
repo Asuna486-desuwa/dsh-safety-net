@@ -167,3 +167,18 @@ test('restore handles native backslash windows paths with missing target dirs', 
   await store.restore(id)
   assert.equal(await dir.readFile('C:/Users/test/.dsh/settings.json'), '{"x":1}')
 })
+
+// Review round 3, #2: a stray FILE in the backup root (e.g. manually created)
+// must not be treated as a snapshot — list() only counts real snapshot
+// directories, so restore('stray') fails loudly instead of "succeeding" while
+// restoring nothing.
+test('list ignores stray files in the backup root; restore rejects them', async () => {
+  const dir = fakeDir()
+  const store = createBackupStore({ root: '/bk', dir })
+  const id = await store.snapshot('/src/a.txt', 'content')
+  // plant a stray file directly in the backup root
+  await dir.writeFile('/bk/stray.txt', 'not a snapshot')
+  const list = await store.list()
+  assert.deepEqual(list.map((e) => e.id), [id])
+  await assert.rejects(() => store.restore('stray.txt'), /no backup/)
+})
