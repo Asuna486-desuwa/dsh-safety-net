@@ -6,7 +6,8 @@ import { makeCtx } from './helpers.mjs'
 
 test('plugin exports name, inject, apply', () => {
   assert.equal(plugin.name, 'safety-net')
-  assert.deepEqual(plugin.inject, ['fs', 'commands', 'jobs'])
+  // 'jobs' was removed from inject — it was declared but never used
+  assert.deepEqual(plugin.inject, ['fs', 'commands'])
   assert.equal(typeof plugin.apply, 'function')
 })
 

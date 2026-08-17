@@ -12,33 +12,37 @@ import { createBackupStore } from '../lib/backup.js'
 //   - stat reports isDirectory() from the stored entry kind
 function fakeDir() {
   const store = new Map()
+  // Normalize a path to the store's key form: no leading slash, no trailing
+  // slash, forward slashes — `C:/Users/x` and `/C:/Users/x` both become
+  // `C:/Users/x` so drive-letter paths match the keys mkdir builds.
+  const key = (p) => String(p).replace(/^[/\\]+/, '').replace(/\\/g, '/').replace(/\/+$/, '')
   return {
     store,
     async mkdir(p, opts) {
       // mimic fs.promises.mkdir(..., { recursive: true }): create every missing
       // parent so stat() of intermediate dirs reports isDirectory() (the real
       // store relies on this when snapshotting multi-level source paths)
-      const parts = String(p).replace(/^[/\\]+/, '').split('/')
+      const parts = key(p).split('/')
       let cur = ''
       for (const part of parts) {
-        cur += '/' + part
-        if (!store.has(cur)) store.set(cur, { kind: 'dir' })
+        cur += (cur ? '/' : '') + part
+        if (!store.has(key(cur))) store.set(key(cur), { kind: 'dir' })
       }
     },
     async readFile(p) {
-      const v = store.get(p)
+      const v = store.get(key(p))
       if (!v) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       return v.text
     },
-    async writeFile(p, text) { store.set(p, { kind: 'file', text }) },
+    async writeFile(p, text) { store.set(key(p), { kind: 'file', text }) },
     async rm(p) {
-      const prefix = p.endsWith('/') ? p : p + '/'
+      const prefix = key(p) ? key(p) + '/' : key(p)
       for (const k of [...store.keys()]) {
-        if (k === p || k.startsWith(prefix)) store.delete(k)
+        if (k === key(p) || k.startsWith(prefix)) store.delete(k)
       }
     },
     async listDir(p) {
-      const prefix = p.endsWith('/') ? p : p + '/'
+      const prefix = key(p) ? key(p) + '/' : key(p)
       const out = new Set()
       for (const k of store.keys()) {
         if (k.startsWith(prefix)) {
@@ -48,11 +52,11 @@ function fakeDir() {
       }
       return [...out]
     },
-    async exists(p) { return store.has(p) },
+    async exists(p) { return store.has(key(p)) },
     async stat(p) {
-      const v = store.get(p)
+      const v = store.get(key(p))
       return {
-        mtimeMs: 0,
+        mtimeMs: v?.mtimeMs ?? 0,
         size: typeof v?.text === 'string' ? v.text.length : 0,
         isDirectory: () => v?.kind === 'dir',
       }
@@ -89,19 +93,30 @@ test('restore writes the snapshot back to source', async () => {
 test('prune keeps the newest retention snapshots', async () => {
   const dir = fakeDir()
   const store = createBackupStore({ root: '/bk', dir })
-  await store.snapshot('/src/a.txt', '1')
-  await store.snapshot('/src/a.txt', '2')
-  await store.snapshot('/src/a.txt', '3')
+  // Snapshot ids are ms-timestamp based and unique; force distinct mtimes so
+  // the sort order is observable, then assert WHICH ids survive — not just the
+  // count (review fix: the old test would pass even if sort kept the oldest).
+  const id1 = await store.snapshot('/src/a.txt', '1')
+  const id2 = await store.snapshot('/src/a.txt', '2')
+  const id3 = await store.snapshot('/src/a.txt', '3')
+  // give each snapshot dir a distinct mtime: newest = id3 (written last)
+  await dir.store.set(`bk/${id1}`, { kind: 'dir', mtimeMs: 100 })
+  await dir.store.set(`bk/${id2}`, { kind: 'dir', mtimeMs: 200 })
+  await dir.store.set(`bk/${id3}`, { kind: 'dir', mtimeMs: 300 })
   await store.prune(2)
   const list = await store.list()
   assert.equal(list.length, 2)
+  // newest two survive (sorted desc: id3, id2); id1 (oldest) is pruned
+  assert.deepEqual(list.map((e) => e.id), [id3, id2])
 })
 
-// Carry-over (Task 4 review): Windows drive paths must be normalized into the
-// snapshot tree — drive letter + leading separators stripped, backslashes
-// unified to '/'. Otherwise posix.relative() mangles drive paths into a
-// CWD-relative garbage path containing ':' (an illegal filename segment).
-test('snapshot normalizes Windows drive paths', async () => {
+// Carry-over (Task 4 review) + Fix 1 (post-release review): Windows drive
+// paths must be normalized into the snapshot tree — drive letter + leading
+// separators stripped, backslashes unified to '/' — so posix.relative() never
+// mangles them. Restore fidelity is lossless: snapshot records the FULL
+// original path in `_meta.json`, and restore writes back to the exact
+// original (drive letter included), not to the normalized form.
+test('snapshot normalizes Windows drive paths and restore writes back to the original drive path', async () => {
   const dir = fakeDir()
   const store = createBackupStore({ root: '/bk', dir })
   const id = await store.snapshot('C:/Users/test/.dsh/settings.json', '{"token":"x"}')
@@ -111,9 +126,26 @@ test('snapshot normalizes Windows drive paths', async () => {
   assert.equal(list[0].id, id)
   // snapshot stored under root/<id>/Users/test/.dsh/settings.json (drive stripped)
   assert.equal(await dir.readFile(`/bk/${id}/${rel}`), '{"token":"x"}')
-  // restore rebuilds the normalized root-relative path and writes the content
-  // back to it (the drive letter is not recoverable once stripped)
-  await dir.writeFile(`/${rel}`, 'corrupted')
+  // sidecar records the full original path (lossless restore)
+  const meta = JSON.parse(await dir.readFile(`/bk/${id}/_meta.json`))
+  assert.equal(meta.sources[rel], 'C:/Users/test/.dsh/settings.json')
+  // corrupt the ORIGINAL path, then restore must write back to it exactly
+  await dir.mkdir('C:/Users/test/.dsh', { recursive: true })
+  await dir.writeFile('C:/Users/test/.dsh/settings.json', 'corrupted')
   await store.restore(id)
-  assert.equal(await dir.readFile(`/${rel}`), '{"token":"x"}')
+  assert.equal(await dir.readFile('C:/Users/test/.dsh/settings.json'), '{"token":"x"}')
+})
+
+// Fix 1 regression: a snapshot WITHOUT a meta sidecar (pre-0.2 backup) must
+// still restore — falling back to the lossy normalized path.
+test('restore falls back to normalized path when no meta sidecar exists', async () => {
+  const dir = fakeDir()
+  const store = createBackupStore({ root: '/bk', dir })
+  const id = await store.snapshot('C:/Users/test/.dsh/settings.json', '{"a":1}')
+  // remove the sidecar to simulate a legacy snapshot
+  dir.store.delete(`bk/${id}/_meta.json`)
+  await dir.mkdir('/Users/test/.dsh', { recursive: true })
+  await dir.writeFile('/Users/test/.dsh/settings.json', 'corrupted')
+  await store.restore(id)
+  assert.equal(await dir.readFile('/Users/test/.dsh/settings.json'), '{"a":1}')
 })

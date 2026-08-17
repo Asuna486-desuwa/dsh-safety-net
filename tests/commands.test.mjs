@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { registerAll, buildStatusText } from '../lib/commands.js'
 import { makeCtx } from './helpers.mjs'
 
-test('registers the four self-recovery commands', () => {
+test('registers the five self-recovery commands', () => {
   const ctx = makeCtx()
   registerAll(ctx)
   const names = ctx.commands.map((c) => c.name)
@@ -12,6 +12,7 @@ test('registers the four self-recovery commands', () => {
   assert.ok(names.includes('safety-net-backup'))
   assert.ok(names.includes('safety-net-restore'))
   assert.ok(names.includes('safety-net-repair'))
+  assert.ok(names.includes('safety-net-approve'))
 })
 
 test('buildStatusText reports guard and backup state', () => {
@@ -105,4 +106,58 @@ test('status handler degrades to error when backup listing fails', async () => {
   assert.equal(result.kind, 'error')
   assert.match(result.text, /safety-net/i)
   assert.match(result.text, /disk on fire/)
+})
+
+// Review fix 2: backup/repair must await the ready promise so a command right
+// after plugin load never sees an empty protectedSources (race).
+test('backup awaits ready before reading protectedSources', async () => {
+  const ctx = makeCtx()
+  let awaitedReady = false
+  ctx.safetyNet = {
+    guard: { rules: [] },
+    backups: {
+      snapshot: async () => {},
+      list: async () => [],
+    },
+    dshHome: 'C:/Users/test/.dsh',
+    strict: true,
+    protectedSources: [],
+    ready: new Promise((resolve) => setTimeout(() => { awaitedReady = true; resolve(['/x/a.txt']) }, 5)),
+    readSource: async () => 'content',
+  }
+  registerAll(ctx)
+  const cmd = ctx.commands.find((c) => c.name === 'safety-net-backup')
+  const result = await cmd.handler('')
+  assert.equal(result.kind, 'success')
+  assert.equal(awaitedReady, true)
+  assert.match(result.text, /backed up 1 protected file/)
+})
+
+// Review fix 5: approve wires guard.approveOnce into the CLI — one-time
+// approval for a protected path, with usage/not-protected branches.
+test('safety-net-approve grants a one-time bypass for protected paths', async () => {
+  const ctx = makeCtx()
+  const approved = []
+  ctx.safetyNet = {
+    guard: {
+      rules: [],
+      isProtected: (p) => p === 'C:/Users/test/.dsh/settings.json',
+      approveOnce: (p) => approved.push(p),
+    },
+  }
+  registerAll(ctx)
+  const cmd = ctx.commands.find((c) => c.name === 'safety-net-approve')
+
+  const ok = await cmd.handler('C:/Users/test/.dsh/settings.json')
+  assert.equal(ok.kind, 'success')
+  assert.deepEqual(approved, ['C:/Users/test/.dsh/settings.json'])
+  assert.match(ok.text, /approved one-time write/i)
+
+  const notProtected = await cmd.handler('C:/Users/test/Desktop/project/src/main.js')
+  assert.equal(notProtected.kind, 'success')
+  assert.match(notProtected.text, /not protected/i)
+
+  const usage = await cmd.handler('')
+  assert.equal(usage.kind, 'error')
+  assert.match(usage.text, /usage/i)
 })

@@ -29,12 +29,13 @@ DSH 自身的运行时状态以普通文件形式存放在 `~/.dsh`（profiles�
 
 ### 3. CLI 自救通道
 
-四个斜杠命令注册在 DSH CLI 表面上，即使 GUI 挂掉也能使用：
+五个斜杠命令注册在 DSH CLI 表面上，即使 GUI 挂掉也能使用：
 
 - `/safety-net-status` — 护栏健康报告（受保护规则数、备份数、strict 模式）
 - `/safety-net-backup` — 手动全量快照受保护资产
 - `/safety-net-restore` — 列出备份，或按 id 恢复指定备份
 - `/safety-net-repair` — 检测缺失的关键文件并打印恢复指引
+- `/safety-net-approve <path>` — 一次性批准写入受保护路径（授予单次放行，之后护栏重新武装）
 
 详见[命令用法](#命令用法)。
 
@@ -95,25 +96,26 @@ safetyNet:
 | `/safety-net-restore` | 无参数时列出所有备份（新的在前）。 |
 | `/safety-net-restore <id>` | 把指定备份 id 的文件恢复到原位置。 |
 | `/safety-net-repair` | 检测缺失的关键文件并打印恢复指引（绝不自动修改任何东西）。 |
+| `/safety-net-approve <path>` | 一次性批准写入受保护路径（调用 `guard.approveOnce`）；下一次匹配的写入放行后，护栏重新武装。 |
 
 ## 备份目录结构
 
 ```
 <DSH_HOME>/safety-net/backups/
 └── <时间戳id>/          # 例如 1750000000000-a1b2c3
+    ├── _meta.json       # 记录每个快照文件对应的完整原始路径（含盘符）
     └── <相对路径>       # 原路径，去掉盘符，统一 '/' 分隔
 ```
 
-每个快照是一个以时间 id 命名的目录；目录下保留原文件的相对路径，因此恢复时可以把每个文件放回它原来的位置。
+每个快照是一个以时间 id 命名的目录；目录下保留原文件的相对路径，`_meta.json` 记录完整原始路径（含盘符），因此恢复时可以把每个文件精确放回它原来的位置——即使跨越 Windows 盘符也不会写错。
 
 ## 解除误拦截
 
 如果一次合法的写入被拦截——比如你确实需要修改受保护路径下的文件——请注意：
 
+- **一次性放行**：`/safety-net-approve <path>` 为该路径授予单次写入批准；下一次匹配的写入放行后，护栏重新武装（把 `guard.approveOnce` 接进了 CLI）。
 - 通过 `safetyNet.extraProtectedPaths` 添加的路径**运行时只能加不能减**：想解除保护，请从配置中移除该条目并重启 DSH；
 - 内置规则（`~/.dsh`、profiles、state、插件数据目录）无法通过配置移除。`strict` 只*声明*沙箱姿态，**不会**解除路径拦截。要修改内置受保护文件，请先卸载本插件（`dsh plugin remove dsh-safety-net`）完成修改后再装回。
-
-运行时的一次性放行通道（`approveOnce`，守卫上已有单元测试）计划在 v0.2 接入；在那之前，被拦截的错误消息会指向上述两条出路。
 
 ## 自救手册（GUI 挂了怎么办）
 

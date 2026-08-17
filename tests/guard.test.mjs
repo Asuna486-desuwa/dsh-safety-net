@@ -5,12 +5,13 @@ import { createGuard, defaultRules } from '../lib/guard.js'
 
 const DSH_HOME = 'C:/Users/test/.dsh'
 
-test('defaultRules covers DSH home, plugin data, profile files', () => {
-  const ids = defaultRules({ dshHome: DSH_HOME }).map((r) => r.id)
-  assert.ok(ids.includes('dsh-home'))
-  assert.ok(ids.includes('plugin-data'))
-  assert.ok(ids.includes('profile-manifest'))
-  assert.ok(ids.includes('profile-patch'))
+test('defaultRules keeps exactly the two independent dimensions', () => {
+  const rules = defaultRules({ dshHome: DSH_HOME })
+  const ids = rules.map((r) => r.id)
+  assert.deepEqual(ids, ['dsh-home', 'plugin-data'])
+  // dsh-home alone must cover the whole tree (profiles/state/settings are
+  // subdirectories — no redundant per-subdir rules)
+  assert.equal(rules[0].matcher, DSH_HOME)
 })
 
 test('isProtected matches ~/.dsh tree', () => {

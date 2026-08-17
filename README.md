@@ -45,13 +45,14 @@ is one command away from being undone.
 
 ### 3. CLI self-recovery channel
 
-Four slash commands, registered on the DSH CLI surface, work even when the
+Five slash commands, registered on the DSH CLI surface, work even when the
 GUI is down:
 
 - `/safety-net-status` — guardrail health report (protected rules, backups, strict mode)
 - `/safety-net-backup` — manual full snapshot of protected assets
 - `/safety-net-restore` — list backups, or restore one by id
 - `/safety-net-repair` — detect missing critical files and print recovery instructions
+- `/safety-net-approve <path>` — one-time approval to write a protected path (grants a single bypass, then the guard is re-armed)
 
 See [Commands](#commands) for details.
 
@@ -121,12 +122,16 @@ are shown below with a leading `/` as they appear in the DSH UI/CLI.
 | `/safety-net-restore`            | With no argument, lists all backups (newest first).                      |
 | `/safety-net-restore <id>`       | Restores the files of the given backup id to their original locations.   |
 | `/safety-net-repair`             | Detects missing critical files and prints recovery instructions (never auto-modifies anything). |
+| `/safety-net-approve <path>`     | Grants a one-time write bypass for a protected path (calls `guard.approveOnce`); the next matching mutation passes, then the guard re-arms. |
 
 ## Unblocking a false positive
 
 If a legitimate write is blocked — e.g. you really need to modify a file under
 a protected path — keep this in mind:
 
+- **one-time bypass**: `/safety-net-approve <path>` grants a single write
+  approval for that path; the next matching mutation passes, then the guard
+  re-arms. (This wires `guard.approveOnce` into the CLI.)
 - paths you added via `safetyNet.extraProtectedPaths` are **add-only at
   runtime**: to stop protecting one, remove the entry from the config and
   restart DSH;
@@ -145,12 +150,14 @@ two options above.
 ```
 <DSH_HOME>/safety-net/backups/
 └── <timestamp-id>/          # e.g. 1750000000000-a1b2c3
+    ├── _meta.json           # maps each snapshot file back to its EXACT original path
     └── <relative-path>      # original path, drive letter stripped, '/' separators
 ```
 
 Each snapshot is one directory named by a time-based id; the original relative
-path is preserved beneath it, so restore can put every file back exactly where
-it was.
+path is preserved beneath it, and `_meta.json` records the full original path
+(drive letter included) so restore writes every file back to exactly where it
+came from — even across Windows drive letters.
 
 ## Scope & disclaimer
 
