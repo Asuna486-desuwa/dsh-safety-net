@@ -8,12 +8,20 @@ import { join } from 'node:path'
 import plugin from '../lib/index.js'
 import { makeCtx } from './helpers.mjs'
 
-test('apply wires backups + readSource + protectedSources into ctx.safetyNet', () => {
-  const ctx = makeCtx()
-  plugin.apply(ctx)
-  assert.ok(ctx.safetyNet, 'ctx.safetyNet must exist')
-  assert.equal(typeof ctx.safetyNet.readSource, 'function')
-  assert.ok(Array.isArray(ctx.safetyNet.protectedSources))
+// FIX ROUND 1 (Minor-1): inject dshHome + pluginDataRoot so every guard rule
+// (dsh home, plugin data, profiles, state) points into a throwaway temp dir —
+// expandSources never touches the real ~/.dsh, even read-only.
+test('apply wires backups + readSource + protectedSources into ctx.safetyNet', async () => {
+  const tmp = await mkdtemp(join(tmpdir(), 'safetynet-'))
+  try {
+    const ctx = makeCtx({ config: { safetyNet: { dshHome: tmp, pluginDataRoot: tmp } } })
+    plugin.apply(ctx)
+    assert.ok(ctx.safetyNet, 'ctx.safetyNet must exist')
+    assert.equal(typeof ctx.safetyNet.readSource, 'function')
+    assert.ok(Array.isArray(ctx.safetyNet.protectedSources))
+  } finally {
+    await rm(tmp, { recursive: true, force: true })
+  }
 })
 
 // The integration heart of Task 7: a blocked mutation must FIRST snapshot the
