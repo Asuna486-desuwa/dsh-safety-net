@@ -69,7 +69,7 @@ test('backup/restore degrade to error when backups is null', async () => {
 test('restore with an id restores that backup', async () => {
   const ctx = makeCtx()
   let restoredId = null
-  ctx.safetyNet = {
+  ctx.provide('safetyNet', {
     guard: { rules: [] },
     backups: {
       list: async () => [{ id: 'bk-1' }],
@@ -79,7 +79,7 @@ test('restore with an id restores that backup', async () => {
     strict: true,
     protectedSources: [],
     readSource: async () => 'x',
-  }
+  })
   registerAll(ctx)
   const cmd = ctx.commands.find((c) => c.name === 'safety-net-restore')
   const result = await cmd.handler('bk-1')
@@ -92,14 +92,14 @@ test('restore with an id restores that backup', async () => {
 // status command — it returns an error result instead.
 test('status handler degrades to error when backup listing fails', async () => {
   const ctx = makeCtx()
-  ctx.safetyNet = {
+  ctx.provide('safetyNet', {
     guard: { rules: [] },
     backups: { list: async () => { throw new Error('disk on fire') } },
     dshHome: 'C:/Users/test/.dsh',
     strict: true,
     protectedSources: [],
     readSource: async () => 'x',
-  }
+  })
   registerAll(ctx)
   const cmd = ctx.commands.find((c) => c.name === 'safety-net-status')
   const result = await cmd.handler('')
@@ -113,7 +113,7 @@ test('status handler degrades to error when backup listing fails', async () => {
 test('backup awaits ready before reading protectedSources', async () => {
   const ctx = makeCtx()
   let awaitedReady = false
-  ctx.safetyNet = {
+  ctx.provide('safetyNet', {
     guard: { rules: [] },
     backups: {
       snapshot: async () => {},
@@ -124,7 +124,7 @@ test('backup awaits ready before reading protectedSources', async () => {
     protectedSources: [],
     ready: new Promise((resolve) => setTimeout(() => { awaitedReady = true; resolve(['/x/a.txt']) }, 5)),
     readSource: async () => 'content',
-  }
+  })
   registerAll(ctx)
   const cmd = ctx.commands.find((c) => c.name === 'safety-net-backup')
   const result = await cmd.handler('')
@@ -145,9 +145,9 @@ const CMD_DSH_HOME = 'C:/Users/test/.dsh'
 
 test('safety-net-approve grants a one-time bypass for protected paths', async () => {
   const ctx = makeCtx()
-  ctx.safetyNet = {
+  ctx.provide('safetyNet', {
     guard: createGuard({ dshHome: CMD_DSH_HOME, extraProtectedPaths: [] }),
-  }
+  })
   registerAll(ctx)
   const cmd = ctx.commands.find((c) => c.name === 'safety-net-approve')
   const target = `${CMD_DSH_HOME}/settings.json`
@@ -172,9 +172,9 @@ test('safety-net-approve grants a one-time bypass for protected paths', async ()
 // one-time bypass, and the second call must never misreport "not protected".
 test('approve twice stays armed and never misreports not protected', async () => {
   const ctx = makeCtx()
-  ctx.safetyNet = {
+  ctx.provide('safetyNet', {
     guard: createGuard({ dshHome: CMD_DSH_HOME, extraProtectedPaths: [] }),
-  }
+  })
   registerAll(ctx)
   const cmd = ctx.commands.find((c) => c.name === 'safety-net-approve')
   const target = `${CMD_DSH_HOME}/settings.json`
@@ -197,7 +197,7 @@ test('approve twice stays armed and never misreports not protected', async () =>
 // skipped quietly.
 test('backup reports per-file failures instead of swallowing them', async () => {
   const ctx = makeCtx()
-  ctx.safetyNet = {
+  ctx.provide('safetyNet', {
     guard: { rules: [] },
     backups: { snapshot: async () => {}, list: async () => [] },
     dshHome: 'C:/Users/test/.dsh',
@@ -209,7 +209,7 @@ test('backup reports per-file failures instead of swallowing them', async () => 
       if (p === '/x/gone.txt') { const e = new Error('ENOENT'); e.code = 'ENOENT'; throw e }
       return 'content'
     },
-  }
+  })
   registerAll(ctx)
   const cmd = ctx.commands.find((c) => c.name === 'safety-net-backup')
   const result = await cmd.handler('')

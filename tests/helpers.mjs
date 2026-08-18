@@ -81,13 +81,22 @@ export function makeCtx({ config, fs } = {}) {
       provided.set(name, value)
     },
   }
-  // Cordis ctx is a proxy: direct assignment to a provided service name is
-  // equivalent to provide() there (but the plugin must call provide() — tests
-  // use this setter to pre-seed a fake service as Cordis would expose it).
+  // Cordis ctx is a proxy (cordis/lib/index.js:699-706): assigning to a name
+  // that was NEVER provided throws "cannot set property without provide" —
+  // exactly the bug that crashed DSH startup. The fake replicates that trap:
+  // direct assignment to `safetyNet` is only allowed AFTER
+  // ctx.provide('safetyNet', ...) has registered it. This keeps the
+  // provide-side regression (someone reverting ctx.provide() back to
+  // ctx.safetyNet = ...) from silently passing tests (Claude Code review).
   Object.defineProperty(ctx, 'safetyNet', {
     configurable: true,
     get: () => provided.get('safetyNet'),
-    set: (value) => provided.set('safetyNet', value),
+    set: (value) => {
+      if (!provided.has('safetyNet')) {
+        throw new TypeError('cannot set property "safetyNet" without provide')
+      }
+      provided.set('safetyNet', value)
+    },
   })
   // inject['fs'] is consumed via ctx.fs?.sandboxMode
   Object.defineProperty(ctx, 'fs', {
