@@ -30,22 +30,39 @@ export function makeFakeFs() {
   }
 }
 
-export function makeCtx({ config } = {}) {
+// Real-Cordis-shaped fake ctx: models the API surface the plugin actually
+// consumes, so tests catch Cordis misusage instead of passing against a
+// wrong-shaped stub.
+//
+//  - Cordis calls apply(ctx, pluginConfig) — the plugin's own config arrives
+//    as the SECOND argument, NOT as ctx.config (reading ctx.config throws
+//    "cannot get property config without inject"). We keep a `config` field
+//    for compatibility but the real contract is the apply() second argument.
+//  - Services must be registered via ctx.provide(name, value) — direct
+//    assignment (ctx.safetyNet = {...}) throws "cannot set property without
+//    provide" in Cordis. `provided` records what apply() provides.
+//  - `fs` is in the plugin's inject list, so the fake exposes ctx.fs with a
+//    `sandboxMode` getter (undefined by default, overridable).
+export function makeCtx({ config, fs } = {}) {
   const listeners = new Map()
   const commands = []
   const killedJobs = []
   const effects = []
+  const provided = new Map()
   // commands doubles as a registry: an array that also exposes register()
   commands.register = function register(definition) {
     commands.push(definition)
     return () => {}
   }
-  return {
+  const ctx = {
+    // config kept for legacy test call sites; the canonical way is the
+    // apply(ctx, pluginConfig) second argument (see plugin.apply below)
     config,
     listeners,
     commands,
     killedJobs,
     effects,
+    provided,
     on(event, fn) {
       if (!listeners.has(event)) listeners.set(event, [])
       listeners.get(event).push(fn)
@@ -60,5 +77,32 @@ export function makeCtx({ config } = {}) {
       effects.push(label)
       return fn()
     },
+    provide(name, value) {
+      provided.set(name, value)
+    },
   }
+  // Cordis ctx is a proxy: direct assignment to a provided service name is
+  // equivalent to provide() there (but the plugin must call provide() — tests
+  // use this setter to pre-seed a fake service as Cordis would expose it).
+  Object.defineProperty(ctx, 'safetyNet', {
+    configurable: true,
+    get: () => provided.get('safetyNet'),
+    set: (value) => provided.set('safetyNet', value),
+  })
+  // inject['fs'] is consumed via ctx.fs?.sandboxMode
+  Object.defineProperty(ctx, 'fs', {
+    configurable: true,
+    get: () => fs,
+  })
+  return ctx
+}
+
+/**
+ * Apply the plugin the way Cordis does: config as the SECOND argument.
+ * Tests should call this instead of plugin.apply(ctx) so the real contract
+ * (and the regression that broke DSH startup) is exercised.
+ */
+export function applyPlugin(plugin, ctx, pluginConfig) {
+  plugin.apply(ctx, pluginConfig)
+  return ctx
 }

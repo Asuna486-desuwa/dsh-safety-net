@@ -22,9 +22,8 @@ test('strict defaults to on when unset', () => {
 // must never silently claim enforcement.
 test('strict on warns when the host sandbox default is wider', () => {
   for (const mode of ['workspace-write', 'danger-full-access']) {
-    const ctx = makeCtx()
-    ctx.fs = { sandboxMode: mode }
-    const warns = captureWarns(() => plugin.apply(ctx))
+    const ctx = makeCtx({ fs: { sandboxMode: mode } })
+    const warns = captureWarns(() => plugin.apply(ctx, {}))
     assert.ok(
       warns.some((w) => /strict mode is on/.test(w) && w.includes(mode) && /consider tightening it/.test(w)),
       `expected a tightening warning for ${mode}, got ${JSON.stringify(warns)}`,
@@ -33,19 +32,17 @@ test('strict on warns when the host sandbox default is wider', () => {
 })
 
 test('strict on stays silent when the host sandbox is absent or already read-only', () => {
-  const warns1 = captureWarns(() => plugin.apply(makeCtx())) // ctx.fs undefined
+  const warns1 = captureWarns(() => plugin.apply(makeCtx(), {})) // ctx.fs undefined
   assert.equal(warns1.length, 0, 'no sandboxMode → no warning')
 
-  const ctx = makeCtx()
-  ctx.fs = { sandboxMode: 'read-only' }
-  const warns2 = captureWarns(() => plugin.apply(ctx))
+  const ctx = makeCtx({ fs: { sandboxMode: 'read-only' } })
+  const warns2 = captureWarns(() => plugin.apply(ctx, {}))
   assert.equal(warns2.length, 0, 'read-only host default → no warning')
 })
 
 test('strict off never warns about the host sandbox default', () => {
-  const ctx = makeCtx({ config: { safetyNet: { strict: false } } })
-  ctx.fs = { sandboxMode: 'danger-full-access' }
-  const warns = captureWarns(() => plugin.apply(ctx))
+  const ctx = makeCtx({ fs: { sandboxMode: 'danger-full-access' } })
+  const warns = captureWarns(() => plugin.apply(ctx, { strict: false }))
   assert.equal(warns.length, 0, 'strict off → no warning')
 })
 

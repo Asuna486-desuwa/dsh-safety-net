@@ -13,5 +13,6 @@ test('plugin exports name, inject, apply', () => {
 
 test('apply(ctx) runs without throwing', () => {
   const ctx = makeCtx()
-  assert.doesNotThrow(() => plugin.apply(ctx))
+  // Cordis calls apply(ctx, pluginConfig) — second arg is the plugin config.
+  assert.doesNotThrow(() => plugin.apply(ctx, {}))
 })

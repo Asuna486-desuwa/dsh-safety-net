@@ -7,8 +7,9 @@ import { makeCtx } from './helpers.mjs'
 const DSH_HOME = 'C:/Users/test/.dsh'
 
 function setup() {
-  const ctx = makeCtx({ config: { safetyNet: { dshHome: DSH_HOME } } })
-  plugin.apply(ctx)
+  const ctx = makeCtx()
+  // Cordis calls apply(ctx, pluginConfig) — config is the SECOND argument.
+  plugin.apply(ctx, { dshHome: DSH_HOME })
   return ctx
 }
 

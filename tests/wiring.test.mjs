@@ -11,14 +11,15 @@ import { makeCtx } from './helpers.mjs'
 // FIX ROUND 1 (Minor-1): inject dshHome + pluginDataRoot so every guard rule
 // (dsh home, plugin data, profiles, state) points into a throwaway temp dir —
 // expandSources never touches the real ~/.dsh, even read-only.
-test('apply wires backups + readSource + protectedSources into ctx.safetyNet', async () => {
+test('apply wires backups + readSource + protectedSources via ctx.provide', async () => {
   const tmp = await mkdtemp(join(tmpdir(), 'safetynet-'))
   try {
-    const ctx = makeCtx({ config: { safetyNet: { dshHome: tmp, pluginDataRoot: tmp } } })
-    plugin.apply(ctx)
-    assert.ok(ctx.safetyNet, 'ctx.safetyNet must exist')
-    assert.equal(typeof ctx.safetyNet.readSource, 'function')
-    assert.ok(Array.isArray(ctx.safetyNet.protectedSources))
+    const ctx = makeCtx()
+    plugin.apply(ctx, { dshHome: tmp, pluginDataRoot: tmp })
+    const service = ctx.provided.get('safetyNet')
+    assert.ok(service, 'ctx.provide("safetyNet", ...) must have been called')
+    assert.equal(typeof service.readSource, 'function')
+    assert.ok(Array.isArray(service.protectedSources))
   } finally {
     await rm(tmp, { recursive: true, force: true })
   }
@@ -32,8 +33,8 @@ test('blocked write snapshots the original before refusing', async () => {
   const tmp = await mkdtemp(join(tmpdir(), 'safety-net-wiring-'))
   try {
     const dshHome = join(tmp, 'home')
-    const ctx = makeCtx({ config: { safetyNet: { dshHome } } })
-    plugin.apply(ctx)
+    const ctx = makeCtx()
+    plugin.apply(ctx, { dshHome })
     const settings = join(dshHome, 'settings.json')
     await mkdir(dshHome, { recursive: true })
     await writeFile(settings, '{"token":"secret"}', 'utf8')

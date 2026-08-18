@@ -13,14 +13,21 @@ import { join } from 'node:path'
 import plugin from '../lib/index.js'
 import { makeCtx } from './helpers.mjs'
 
+/** Apply like Cordis does (config as apply's second arg) and grab the service. */
+function applyWithConfig(pluginConfig) {
+  const ctx = makeCtx()
+  plugin.apply(ctx, pluginConfig)
+  return { ctx, service: ctx.provided.get('safetyNet') }
+}
+
 /** Wait until apply()'s async expandSources has populated protectedSources. */
-async function waitForSources(ctx, min, timeout = 3000) {
+async function waitForSources(service, min, timeout = 3000) {
   const start = Date.now()
   while (Date.now() - start < timeout) {
-    if (ctx.safetyNet.protectedSources.length >= min) return
+    if (service.protectedSources.length >= min) return
     await new Promise((r) => setTimeout(r, 5))
   }
-  throw new Error(`timed out waiting for protectedSources (got ${ctx.safetyNet.protectedSources.length})`)
+  throw new Error(`timed out waiting for protectedSources (got ${service.protectedSources.length})`)
 }
 
 test('protectedSources contains only regular files, recursing into directories', async () => {
@@ -35,11 +42,10 @@ test('protectedSources contains only regular files, recursing into directories',
 
     // pluginDataRoot is injected into the same tmp so expandSources never
     // touches the real ~/.claude/plugins/data, even read-only.
-    const ctx = makeCtx({ config: { safetyNet: { dshHome: home, pluginDataRoot: tmp } } })
-    plugin.apply(ctx)
-    await waitForSources(ctx, 1)
+    const { service } = applyWithConfig({ dshHome: home, pluginDataRoot: tmp })
+    await waitForSources(service, 1)
 
-    const sources = ctx.safetyNet.protectedSources
+    const sources = service.protectedSources
     assert.ok(sources.length >= 3, `expected the deep files collected, got ${JSON.stringify(sources)}`)
     for (const src of sources) {
       const st = await stat(src)
@@ -70,12 +76,11 @@ test('every protected source is readable (repair will not misreport)', async () 
     await writeFile(join(home, 'settings.json'), 'x', 'utf8')
     await writeFile(join(home, 'profiles', 'web', 'a.yml'), 'y', 'utf8')
 
-    const ctx = makeCtx({ config: { safetyNet: { dshHome: home, pluginDataRoot: tmp } } })
-    plugin.apply(ctx)
-    await waitForSources(ctx, 1)
+    const { service } = applyWithConfig({ dshHome: home, pluginDataRoot: tmp })
+    await waitForSources(service, 1)
 
-    for (const src of ctx.safetyNet.protectedSources) {
-      const text = await ctx.safetyNet.readSource(src) // throws EISDIR on directories
+    for (const src of service.protectedSources) {
+      const text = await service.readSource(src) // throws EISDIR on directories
       assert.equal(typeof text, 'string')
     }
   } finally {
@@ -97,13 +102,10 @@ test('extraProtectedPaths are included in protectedSources (backed up + repaired
     await writeFile(join(home, 'settings.json'), 'x', 'utf8')
     await writeFile(join(extra, 'nested', 'key.txt'), 'secret', 'utf8')
 
-    const ctx = makeCtx({
-      config: { safetyNet: { dshHome: home, pluginDataRoot: tmp, extraProtectedPaths: [extra] } },
-    })
-    plugin.apply(ctx)
-    await waitForSources(ctx, 1)
+    const { service } = applyWithConfig({ dshHome: home, pluginDataRoot: tmp, extraProtectedPaths: [extra] })
+    await waitForSources(service, 1)
 
-    const sources = ctx.safetyNet.protectedSources
+    const sources = service.protectedSources
     assert.ok(sources.includes(join(extra, 'nested', 'key.txt')), 'extra protected deep file must be collected')
     assert.ok(!sources.includes(extra), 'extra dir itself must not be collected')
   } finally {
