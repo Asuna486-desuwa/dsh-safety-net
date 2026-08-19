@@ -5,7 +5,7 @@ on:
       - 'v*'
 
 jobs:
-  publish:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,6 +17,16 @@ jobs:
       # private packages absent from public npm; CI/tests do not need them.
       - run: npm ci --legacy-peer-deps
       - run: npm test
-      - run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # npm 2026 policy requires interactive browser 2FA (EOTP) for `npm
+      # publish`, which an unattended CI runner cannot provide — automated
+      # publish would always fail. This workflow is therefore a QUALITY GATE
+      # on every version tag (tests must pass); the actual publish is done
+      # manually from a terminal:  `npm publish --registry https://registry.npmjs.org`
+      # and completing the browser authentication prompt.
+      - name: Print manual publish instructions
+        run: |
+          echo "✅ Tests passed for tag ${{ github.ref_name }}."
+          echo "npm 2026 requires interactive 2FA, so publish manually:"
+          echo "  cd <repo> && npm publish --registry https://registry.npmjs.org"
+          echo "  (then complete the browser authentication prompt)"
+
